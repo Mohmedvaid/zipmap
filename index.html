@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zipmap — paste US zip codes, see them on a map</title>
+  <meta name="description" content="Paste US zip codes, see them highlighted on a map. Free, no signup.">
+  <link rel="stylesheet" href="lib/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="layout">
+    <aside class="panel">
+      <header class="panel__header">
+        <h1>zipmap</h1>
+        <p class="tagline">Paste US zip codes, see them on a map.</p>
+      </header>
+
+      <div class="field">
+        <label for="state-select">State</label>
+        <select id="state-select"></select>
+      </div>
+
+      <div class="field">
+        <label for="zip-input">ZIP codes</label>
+        <textarea
+          id="zip-input"
+          rows="10"
+          placeholder="e.g. 60077, 60201, 60202&#10;60035 60062"
+          spellcheck="false"
+          autocomplete="off"
+        ></textarea>
+      </div>
+
+      <button id="highlight-btn" type="button" class="primary">Highlight</button>
+
+      <div id="error-line" class="error" role="alert" hidden></div>
+      <div id="status-line" class="status" aria-live="polite"></div>
+
+      <details id="unmapped-wrap" class="unmapped" hidden>
+        <summary>Unmapped (<span id="unmapped-count">0</span>)</summary>
+        <ul id="unmapped-list"></ul>
+      </details>
+    </aside>
+
+    <section id="map" class="map" aria-label="Map"></section>
+  </main>
+
+  <script src="lib/leaflet/leaflet.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
