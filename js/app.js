@@ -1,16 +1,19 @@
 import { STATES, stateName } from './states.js';
 import { parseZips } from './parse.js';
 import { fetchStateGeoJSON } from './data.js';
-import { initMap, renderZips, resetToUS } from './map.js';
+import { initMap, renderColored, resetToUS } from './map.js';
 
 const LS_STATE_KEY = 'zipmap:state';
-const LS_ZIPS_KEY = 'zipmap:zips';
+const LS_BLUE_KEY = 'lastBlueZips';
+const LS_RED_KEY = 'lastRedZips';
 
 const els = {
   state: document.getElementById('state-select'),
-  zips: document.getElementById('zip-input'),
+  blue: document.getElementById('blue-input'),
+  red: document.getElementById('red-input'),
   highlight: document.getElementById('highlight-btn'),
   status: document.getElementById('status-line'),
+  conflict: document.getElementById('conflict-note'),
   unmappedWrap: document.getElementById('unmapped-wrap'),
   unmappedCount: document.getElementById('unmapped-count'),
   unmappedList: document.getElementById('unmapped-list'),
@@ -41,82 +44,135 @@ function setStatus(text) {
   els.status.textContent = text || '';
 }
 
-function renderUnmapped(zips) {
-  if (!zips.length) {
+function setConflict(count) {
+  if (!count) {
+    els.conflict.textContent = '';
+    els.conflict.hidden = true;
+    return;
+  }
+  const noun = count === 1 ? 'zip was' : 'zips were';
+  els.conflict.textContent = `${count} ${noun} in both lists; treated as red.`;
+  els.conflict.hidden = false;
+}
+
+function renderUnmapped(items) {
+  if (!items.length) {
     els.unmappedWrap.hidden = true;
     els.unmappedList.innerHTML = '';
     return;
   }
   els.unmappedWrap.hidden = false;
-  els.unmappedCount.textContent = String(zips.length);
+  els.unmappedCount.textContent = String(items.length);
   els.unmappedList.innerHTML = '';
-  for (const z of zips) {
+  for (const { zip, color } of items) {
     const li = document.createElement('li');
-    li.textContent = z;
+    const dot = document.createElement('span');
+    dot.className = `dot dot--${color}`;
+    const label = document.createElement('span');
+    label.textContent = zip;
+    li.appendChild(dot);
+    li.appendChild(label);
     els.unmappedList.appendChild(li);
   }
+}
+
+function refreshButtonState() {
+  // Highlight is enabled once the user has typed at least one parseable zip
+  // into the blue textarea AND picked a state. Red alone is not enough.
+  const hasBlue = parseZips(els.blue.value).length > 0;
+  const hasState = !!els.state.value;
+  els.highlight.disabled = !(hasBlue && hasState);
 }
 
 async function highlight() {
   setError('');
   const stateCode = els.state.value;
-  const text = els.zips.value;
-
   if (!stateCode) {
     setError('Pick a state first.');
     return;
   }
 
-  const zips = parseZips(text);
-  if (!zips.length) {
-    setStatus(`0 of 0 mapped to ${stateName(stateCode)}.`);
-    renderUnmapped([]);
-    resetToUS();
+  const blueRaw = parseZips(els.blue.value);
+  const redRaw = parseZips(els.red.value);
+
+  if (!blueRaw.length) {
+    setError('Enter at least one blue zip.');
     return;
   }
 
+  // Red wins on conflict: a zip in both lists is removed from the blue set
+  // before matching, so it paints red and counts in the red bucket only.
+  const redSet = new Set(redRaw);
+  const conflicts = blueRaw.filter(z => redSet.has(z));
+  const blueEffective = blueRaw.filter(z => !redSet.has(z));
+  const redEffective = redRaw;
+
+  els.highlight.dataset.busy = '1';
   els.highlight.disabled = true;
   setStatus('Loading…');
+
   let geo;
   try {
     geo = await fetchStateGeoJSON(stateCode);
   } catch (err) {
     setError(err.message);
     setStatus('');
-    els.highlight.disabled = false;
     return;
   } finally {
-    els.highlight.disabled = false;
+    delete els.highlight.dataset.busy;
+    refreshButtonState();
   }
 
-  const want = new Set(zips);
-  const matchedFeatures = [];
-  const matchedZips = new Set();
+  const featureByZip = new Map();
   for (const f of geo.features) {
     const z = f.properties && f.properties.zip;
-    if (z && want.has(z)) {
-      matchedFeatures.push(f);
-      matchedZips.add(z);
-    }
+    if (z) featureByZip.set(z, f);
   }
-  const unmapped = zips.filter(z => !matchedZips.has(z));
 
-  setStatus(`${matchedZips.size} of ${zips.length} mapped to ${stateName(stateCode)}.`);
+  const matched = (zips) => {
+    const features = [];
+    const matchedSet = new Set();
+    for (const z of zips) {
+      const f = featureByZip.get(z);
+      if (f) { features.push(f); matchedSet.add(z); }
+    }
+    return { features, matchedSet };
+  };
+
+  const blueMatched = matched(blueEffective);
+  const redMatched = matched(redEffective);
+
+  const state = stateName(stateCode);
+  const lines = [`Blue: ${blueMatched.matchedSet.size} of ${blueEffective.length} mapped to ${state}`];
+  if (redEffective.length) {
+    lines.push(`Red: ${redMatched.matchedSet.size} of ${redEffective.length} mapped to ${state}`);
+  }
+  setStatus(lines.join('\n'));
+  setConflict(conflicts.length);
+
+  const unmapped = [
+    ...blueEffective.filter(z => !blueMatched.matchedSet.has(z)).map(zip => ({ zip, color: 'blue' })),
+    ...redEffective.filter(z => !redMatched.matchedSet.has(z)).map(zip => ({ zip, color: 'red' })),
+  ];
   renderUnmapped(unmapped);
-  renderZips(matchedFeatures);
+
+  renderColored({ blue: blueMatched.features, red: redMatched.features });
 
   try {
     localStorage.setItem(LS_STATE_KEY, stateCode);
-    localStorage.setItem(LS_ZIPS_KEY, text);
+    localStorage.setItem(LS_BLUE_KEY, els.blue.value);
+    localStorage.setItem(LS_RED_KEY, els.red.value);
   } catch {}
 }
 
 function restorePersisted() {
   try {
     const s = localStorage.getItem(LS_STATE_KEY);
-    const z = localStorage.getItem(LS_ZIPS_KEY);
+    const b = localStorage.getItem(LS_BLUE_KEY);
+    const r = localStorage.getItem(LS_RED_KEY);
     if (s) els.state.value = s;
-    if (z) els.zips.value = z;
+    if (b) els.blue.value = b;
+    if (r) els.red.value = r;
   } catch {}
 }
 
@@ -124,13 +180,21 @@ function main() {
   populateStateDropdown();
   initMap('map');
   restorePersisted();
+  refreshButtonState();
+
   els.highlight.addEventListener('click', highlight);
-  els.zips.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      highlight();
-    }
-  });
+  for (const input of [els.blue, els.red, els.state]) {
+    input.addEventListener('input', refreshButtonState);
+    input.addEventListener('change', refreshButtonState);
+  }
+  for (const ta of [els.blue, els.red]) {
+    ta.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        if (!els.highlight.disabled) highlight();
+      }
+    });
+  }
 }
 
 main();

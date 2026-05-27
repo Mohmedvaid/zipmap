@@ -21,21 +21,34 @@
         <select id="state-select"></select>
       </div>
 
-      <div class="field">
-        <label for="zip-input">ZIP codes</label>
-        <textarea
-          id="zip-input"
-          rows="10"
-          placeholder="e.g. 60077, 60201, 60202&#10;60035 60062"
-          spellcheck="false"
-          autocomplete="off"
-        ></textarea>
+      <div class="zip-grid">
+        <div class="field field--blue">
+          <label for="blue-input">Blue ZIPs <span class="field__hint">required</span></label>
+          <textarea
+            id="blue-input"
+            rows="10"
+            placeholder="e.g. 60077, 60201, 60202&#10;60035 60062"
+            spellcheck="false"
+            autocomplete="off"
+          ></textarea>
+        </div>
+        <div class="field field--red">
+          <label for="red-input">Red ZIPs <span class="field__hint">optional</span></label>
+          <textarea
+            id="red-input"
+            rows="10"
+            placeholder="e.g. 60053, 60076"
+            spellcheck="false"
+            autocomplete="off"
+          ></textarea>
+        </div>
       </div>
 
-      <button id="highlight-btn" type="button" class="primary">Highlight</button>
+      <button id="highlight-btn" type="button" class="primary" disabled>Highlight</button>
 
       <div id="error-line" class="error" role="alert" hidden></div>
       <div id="status-line" class="status" aria-live="polite"></div>
+      <div id="conflict-note" class="conflict-note" hidden></div>
 
       <details id="unmapped-wrap" class="unmapped" hidden>
         <summary>Unmapped (<span id="unmapped-count">0</span>)</summary>

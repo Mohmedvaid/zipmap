@@ -61,30 +61,39 @@ When the user **selects a state** but hasn't pasted yet:
 
 ### 2.3 Paste & result UI
 
-As the user types/pastes into the textarea, **live-update** a small counter row above the map:
+The paste panel has **two textareas**, side-by-side on desktop, stacked on mobile:
 
-- **Valid** (matched to a ZCTA in the selected state) — count
-- **Invalid** (not a real ZCTA, or belongs to another state) — count
-- **Duplicates** (de-duped silently) — count
+- **Blue ZIPs** (required) — the primary list. The "Highlight" button is disabled until this contains at least one parseable zip.
+- **Red ZIPs** (optional) — the secondary list. Used for comparison: "where are my customers vs. where are my competitors", "won deals vs. lost deals", etc.
 
-After paste finishes (debounce ~150ms):
+Each textarea has a color-coded label and a same-color focus ring so the user is never confused about which list they're editing.
 
-1. Map renders matched ZCTAs with the highlight style (§2.4).
-2. Map **auto-fits** bounds to the matched ZCTAs.
-3. Below the textarea, two collapsible lists appear:
-   - **Mapped (N):** list of valid zips.
-   - **Unmapped (M):** list of inputs with a per-row reason (`not a US zip` / `belongs to CA` / `no ZCTA exists`).
-4. Top of the result panel shows a single line: **"X of Y zips mapped to Texas."**
-5. **Bidirectional list ↔ map hover:**
-   - Hovering a row in the Mapped list flashes the corresponding polygon (brighter fill + thicker stroke for ~600ms, or sustained while hovered).
-   - Hovering a polygon on the map highlights its row in the Mapped list (scroll into view if offscreen, highlight background).
-   - Hovering an Unmapped row is a visual no-op on the map.
-6. On the map, **hover/click on a polygon → popup with the zip code**. On touch devices, tap shows popup (click outside dismisses).
+When the user clicks **Highlight**:
+
+1. Both textareas are parsed (§3) into deduped zip sets.
+2. **Red wins on conflict.** A zip that appears in both lists is removed from the blue set, rendered red on the map, and counted in the red bucket. When this happens, a small note appears above the unmapped list: *"N zips were in both lists; treated as red."*
+3. Map renders matched ZCTAs as two layers — blue first, red on top — with the highlight style (§2.4).
+4. Map **auto-fits** bounds to the union of all matched ZCTAs.
+5. Status panel shows a **two-line counter**:
+   - `Blue: X of Y mapped to Texas`
+   - `Red: X of Y mapped to Texas` *(omitted if the red textarea is empty)*
+
+   `Y` is the post-conflict effective count for that color, so `Blue + Red + conflicts = total user input` always balances.
+6. A collapsible **Unmapped (M)** list appears below the status. Each row shows a small colored dot (blue or red) so the user knows which textarea to fix.
+7. On the map, **hover/click on a polygon → popup with the zip code**. On touch devices, tap shows popup (click outside dismisses).
+
+**Deferred to a later PR (not v1.0 critical):**
+
+- Live-update counters as the user types (currently button-triggered).
+- **Bidirectional list ↔ map hover** (Mapped list ↔ polygon highlight).
+- Per-row "reason" strings on unmapped entries (`belongs to CA` / `not a US zip`) — currently the dot tells you the color, and unmapped means "not in the selected state's geojson".
 
 ### 2.4 Highlight style
 
-- **Solid fill + thin stroke.** Single brand color (TBD — start with a saturated blue like `#2563eb`).
-- Default state: ~55% opacity fill, 1px stroke same color at 100% opacity.
+- **Solid fill + thin stroke.** Two brand colors:
+  - Blue: `#2563eb` (tailwind blue-600)
+  - Red:  `#dc2626` (tailwind red-600)
+- Default state: 50% opacity fill, 1px stroke same color at 100% opacity.
 - Hover state: 100% opacity fill, 2px stroke.
 
 ### 2.5 Camera behavior
@@ -101,21 +110,25 @@ After paste finishes (debounce ~150ms):
 
 ## 3. Input Parsing
 
-Apply these rules to the textarea contents, in order:
+Each textarea (blue and red) is parsed independently using the same rules:
 
-1. **Split on any non-digit run.** Commas, newlines, spaces, tabs, semicolons, pipes — all treated as separators.
-2. **For each token, take the first 5 leading digits.** This handles `12345-6789` (Zip+4) by taking `12345`. Tokens with fewer than 5 digits (e.g. `1234`) are left-padded with zeros to 5 (`01234`).
-3. **Discard empty tokens and tokens with no digits.**
-4. **Trim whitespace** (implicit in tokenization above).
-5. **Deduplicate** silently, preserving first occurrence order.
-6. **Classify each unique zip:**
-   - In the loaded state file → **mapped**.
-   - Has a known US zip→state mapping but not the selected state → **unmapped (belongs to XX)**.
-   - Not a recognized US zip at all → **unmapped (not a US zip)**.
+1. **Split on whitespace, comma, semicolon, or pipe.** Hyphens are *not* separators — that lets the next rule strip the `+4` suffix of `12345-6789` cleanly.
+2. **For each token, extract the leading digit run.** Tokens with no leading digits are discarded (e.g. `abc` → nothing).
+3. **Slice or pad to 5 digits.** `12345-6789` → leading digits `12345` → `12345`. `1234` → `01234` (handles New England zips that lost a leading zero in a spreadsheet round-trip). `604001234` (zip+4 with no separator) → `60400`.
+4. **Deduplicate within the textarea**, preserving first-occurrence order.
 
-The classifier needs a global zip→state lookup (see §4.3).
+After both textareas are parsed, apply the **cross-list conflict rule**:
 
-**Out of scope:** "junk-tolerant CSV row" parsing (e.g. `12345, John Smith, $400`). The non-digit-split rule already handles delimiters; we don't try to be smart about ignoring trailing data on a line.
+5. **Red wins.** Any zip present in both deduped lists is removed from the blue set. It will render red on the map and count in the red bucket only. The conflict count is surfaced in the UI (§2.3).
+
+Then **classify each unique zip per color**:
+
+6. In the loaded state's geojson → **mapped**.
+7. Otherwise → **unmapped**, tagged with its color so the UI can show which textarea to fix.
+
+The "belongs to CA" / "not a US zip" distinction described in earlier drafts requires the global `zip-to-state.json` lookup (§4.3) and is deferred to a follow-up PR; for now, unmapped is unmapped.
+
+**Out of scope:** "junk-tolerant CSV row" parsing (e.g. `12345, John Smith, $400`). The split-on-whitespace-and-punctuation rule handles delimiters; we don't try to be smart about ignoring trailing data on a line.
 
 ---
 
@@ -191,13 +204,15 @@ Generated state HTML files **are committed** to the repo (cheap to regenerate; m
 When the user has a pasted result, support a shareable URL of the form:
 
 ```
-https://mohmedvaid.github.io/zipmap/tx/#z=<lz-string-base64>
+https://mohmedvaid.github.io/zipmap/?state=il&blue=60077,60201&red=60035,60062
 ```
 
-- The **fragment** (`#`) is used (not the query string) to avoid the encoded paste being sent to servers/logs and to allow effectively unlimited length on most platforms.
-- Encoded value: `LZString.compressToEncodedURIComponent(zips.join(','))`. For 2,000 zips, expect ~2-3KB.
-- On page load, if a `#z=` is present, decode → populate textarea → trigger render.
+- **Plain query-string** with the state code plus comma-joined zip lists per color. Easy to construct, easy to debug, no client-side library required.
+- On page load: if `?state=` is present, select the state; if `blue=` or `red=` is present, populate the corresponding textarea and trigger a render.
 - After a paste, **don't** auto-update the URL. Provide an explicit **"Copy share link"** button next to the result counter.
+- Length budget: 5-digit zips + `,` separators fit ~1,300 zips per color in 8KB. That's well above the 5,000-unique soft cap (§8) only for moderate inputs — re-check when both lists are large, and fall back to a compressed `#z=` fragment if needed.
+
+An earlier draft proposed a fragment-based scheme (`#z=<lz-string-base64>`) for longer payloads and to keep zips out of server logs. We dropped it because: (a) lz-string adds a runtime dep for marginal benefit at our expected sizes, (b) query strings are crawlable / shareable in more places (Slack unfurls, etc.), and (c) GitHub Pages doesn't log the URLs anywhere we care about.
 
 ### 5.3 State-in-URL summary
 
