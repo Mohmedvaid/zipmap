@@ -55,3 +55,9 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Build cache for scripts/build-state-data.mjs
+.cache/
+
+# Output of scripts/build-state-data.mjs (published to GitHub Releases, not committed)
+dist/
