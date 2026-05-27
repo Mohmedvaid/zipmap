@@ -139,17 +139,32 @@ This script is **manually run** by the maintainer when Census ships new ZCTA dat
 
 ### 4.2 Distribution
 
-State files are **not** committed to the main repo. Instead:
+State files are **not committed to `main`**. Distribution uses two
+coordinated artifacts on the same tag:
 
-- Run the build script locally.
-- Create a **GitHub Release** tagged `data-YYYY` (e.g. `data-2024`) containing the `dist/states/*.geojson` and `zip-to-state.json` files.
-- The runtime app fetches from `https://cdn.jsdelivr.net/gh/Mohmedvaid/zipmap@data-2024/states/<state>.geojson`.
+- An **orphan-branch Git tag** named `data-YYYY` (e.g. `data-2024`) whose
+  *tree* contains the data files at the repo root (`states/<abbr>.geojson`,
+  `zip-to-state.json`). jsDelivr's `@<tag>` URL serves the repo tree at the
+  tagged commit — not Release assets — so the data has to live in some
+  commit's tree. Using an orphan branch (no parent on `main`) means the
+  data never appears in normal development history.
+- A **GitHub Release** on the same tag with the same files attached as
+  downloadable assets. This is for direct-download / browsability;
+  jsDelivr is what the app actually fetches from.
+
+The runtime fetches from:
+
+```
+https://cdn.jsdelivr.net/gh/Mohmedvaid/zipmap@data-2024/states/<state>.geojson
+https://cdn.jsdelivr.net/gh/Mohmedvaid/zipmap@data-2024/zip-to-state.json
+```
 
 Rationale:
 
-- Keeps repo lean (~50MB of data lives in Release artifacts, not the working tree).
+- Keeps `main` lean (~20MB of data lives on the orphan tag, not in normal history).
 - **Version pinning** — app references a specific data tag, so a bad rebuild can be rolled back trivially.
 - jsDelivr provides global CDN + browser caching via `Cache-Control` headers automatically.
+- Requires the repo to be **public** (jsDelivr and free-tier GitHub Pages both require this).
 
 The data version (`data-2024`) is defined as a **single constant in the app**:
 
