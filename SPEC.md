@@ -115,7 +115,8 @@ Each textarea (blue and red) is parsed independently using the same rules:
 1. **Split on whitespace, comma, semicolon, or pipe.** Hyphens are *not* separators — that lets the next rule strip the `+4` suffix of `12345-6789` cleanly.
 2. **For each token, extract the leading digit run.** Tokens with no leading digits are discarded (e.g. `abc` → nothing).
 3. **Slice or pad to 5 digits.** `12345-6789` → leading digits `12345` → `12345`. `1234` → `01234` (handles New England zips that lost a leading zero in a spreadsheet round-trip). `604001234` (zip+4 with no separator) → `60400`.
-4. **Deduplicate within the textarea**, preserving first-occurrence order.
+4. **Noisy fallback:** scan the whole input for any `\b\d{5}\b` matches and add any not already produced by steps 1–3. This lets users paste city-name listings like `United States: (60426), (60428), (60475) ; Addison (60101), Aurora (60503), …` without manual cleanup — the parenthesised zips would otherwise be discarded as `(60101)` doesn't start with a digit.
+5. **Deduplicate within the textarea**, preserving first-occurrence order (strict-pass results first, then noisy-fallback extras in source order).
 
 After both textareas are parsed, apply the **cross-list conflict rule**:
 
