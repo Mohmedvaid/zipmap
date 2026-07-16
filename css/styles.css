@@ -49,7 +49,30 @@ html, body {
   color: #374151;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
+
+.field__hint {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.field--blue label { color: #2563eb; }
+.field--red label { color: #dc2626; }
+
+.zip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.field--blue textarea:focus { outline-color: #2563eb; border-color: #2563eb; }
+.field--red textarea:focus { outline-color: #dc2626; border-color: #dc2626; }
 
 select,
 textarea {
@@ -89,7 +112,8 @@ button.primary {
 }
 
 button.primary:hover { background: #1d4ed8; }
-button.primary:disabled { background: #93c5fd; cursor: progress; }
+button.primary:disabled { background: #93c5fd; cursor: not-allowed; }
+button.primary[data-busy="1"]:disabled { cursor: progress; }
 
 .error {
   background: #fef2f2;
@@ -104,6 +128,13 @@ button.primary:disabled { background: #93c5fd; cursor: progress; }
   color: #374151;
   font-size: 14px;
   min-height: 1.4em;
+  white-space: pre-line;
+}
+
+.conflict-note {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
 }
 
 .unmapped summary {
@@ -115,13 +146,32 @@ button.primary:disabled { background: #93c5fd; cursor: progress; }
 
 .unmapped ul {
   margin: 6px 0 0 0;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
   color: #374151;
   max-height: 200px;
   overflow-y: auto;
 }
+
+.unmapped li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 8px;
+}
+
+.dot--blue { background: #2563eb; }
+.dot--red { background: #dc2626; }
 
 .map {
   width: 100%;
@@ -137,5 +187,8 @@ button.primary:disabled { background: #93c5fd; cursor: progress; }
     border-right: 0;
     border-bottom: 1px solid #e5e7eb;
     max-height: 60vh;
+  }
+  .zip-grid {
+    grid-template-columns: 1fr;
   }
 }
