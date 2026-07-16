@@ -106,3 +106,94 @@ necessary. Rebuild when:
 
 Bump the tag (`data-2024` → `data-2025`), publish the new Release, then bump
 `DATA_VERSION` in `js/config.js` in a normal app PR.
+
+---
+
+## `build-income-data.mjs`
+
+Builds `dist/income.json` — a global ZCTA → median household income lookup —
+from the Census [ACS 5-Year Summary File][sf], table **B19013**.
+
+[sf]: https://www.census.gov/programs-surveys/acs/data/summary-file.html
+
+### Why the bulk file and not `api.census.gov`
+
+The API now rejects keyless requests. A build-time key would be one more secret
+to carry for data that doesn't change between releases, so we read the
+table-based Summary File over plain HTTPS instead — same numbers, no account.
+
+### Inputs (downloaded automatically, cached under `.cache/`)
+
+- `acsdt5y2024-b19013.dat` (~18MB) — pipe-delimited, one row per geography,
+  columns `GEO_ID|B19013_E001|B19013_M001`. ZCTA rows are prefixed `860Z200US`,
+  so no separate geography file is needed.
+
+ACS publishes ZCTA-level data **only in the 5-year series** — the 1-year series
+doesn't reach geographies this small. Conveniently, ZCTA is the same key
+`states/*.geojson` uses, so the runtime join is direct.
+
+### Output
+
+- `dist/income.json` — `{ meta, data: { "60077": [estimate, moe], ... } }`.
+  ~650KB raw / ~257KB gzipped for ~30.5k ZCTAs.
+
+The script traps ACS's negative sentinel "jam values" (`-666666666` no estimate,
+`-222222222` MOE n/a, `-333333333` estimate controlled). This matters: untrapped
+they parse as ordinary numbers and paint 3,225 ZCTAs as the poorest in the
+country. ZCTAs with no estimate are omitted entirely — a missing key is smaller
+than a null and the client treats absent as no-data.
+
+### Run
+
+```sh
+npm run build:income-data
+```
+
+Expect ~30s, nearly all of it the download.
+
+### Publishing
+
+Same orphan-tree mechanism as the ZCTA data, but a **separate tag** —
+`income-YYYY`, not `data-YYYY`. ACS ships a vintage every December while ZCTA
+boundaries only move with the decennial census; sharing one tag would mean
+republishing ~50MB of unchanged polygons to bump a year.
+
+```sh
+TAG=income-2024  # ACS 5-year vintage: "2024" = the 2020-2024 estimates
+
+npm run build:income-data
+
+WT=$(mktemp -d)
+git worktree add --orphan -B "$TAG-tree" "$WT"
+cp dist/income.json "$WT/"
+cd "$WT"
+git add income.json
+git commit -m "$TAG data"
+git tag -f "$TAG"
+cd -
+git worktree remove --force "$WT"
+git branch -D "$TAG-tree"
+
+git push origin "$TAG" --force
+
+gh release delete "$TAG" --yes 2>/dev/null || true
+gh release create "$TAG" \
+  --title "Income data $TAG" \
+  --notes "Census ACS 5-Year (2020-2024) table B19013, median household income by ZCTA." \
+  dist/income.json
+```
+
+The app then fetches:
+
+```
+https://cdn.jsdelivr.net/gh/Mohmedvaid/zipmap@<TAG>/income.json
+```
+
+### Updating income data
+
+Unlike ZCTA geometry, this **is** worth rebuilding yearly — Census ships a new
+5-year vintage each December. Bump `VINTAGE` in the script, rebuild, publish
+`income-2025`, then bump `INCOME_VERSION` in `js/config.js` in a normal app PR.
+
+If the breaks in `js/income.js` stop matching the distribution as incomes drift,
+re-check them against the new vintage rather than assuming they still hold.

@@ -32,10 +32,10 @@
             autocomplete="off"
           ></textarea>
         </div>
-        <div class="field field--red">
-          <label for="red-input">Red ZIPs <span class="field__hint">optional</span></label>
+        <div class="field field--black">
+          <label for="black-input">Black ZIPs <span class="field__hint">optional</span></label>
           <textarea
-            id="red-input"
+            id="black-input"
             rows="10"
             placeholder="e.g. 60053, 60076"
             spellcheck="false"
@@ -45,6 +45,16 @@
       </div>
 
       <button id="highlight-btn" type="button" class="primary" disabled>Highlight</button>
+
+      <div class="toggle">
+        <label class="toggle__label" for="income-toggle">
+          <input id="income-toggle" type="checkbox">
+          <span>Color by income</span>
+        </label>
+        <p class="toggle__hint">
+          Fills each zip by median household income; your list colors move to the outline.
+        </p>
+      </div>
 
       <div id="error-line" class="error" role="alert" hidden></div>
       <div id="status-line" class="status" aria-live="polite"></div>

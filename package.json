@@ -4,7 +4,9 @@
   "type": "module",
   "description": "Build-time scripts for zipmap. The app itself has no runtime npm deps.",
   "scripts": {
-    "build:state-data": "node scripts/build-state-data.mjs"
+    "dev": "node scripts/dev-server.mjs",
+    "build:state-data": "node scripts/build-state-data.mjs",
+    "build:income-data": "node scripts/build-income-data.mjs"
   },
   "devDependencies": {
     "mapshaper": "^0.6.93"
