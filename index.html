@@ -46,6 +46,16 @@
 
       <button id="highlight-btn" type="button" class="primary" disabled>Highlight</button>
 
+      <div class="toggle">
+        <label class="toggle__label" for="income-toggle">
+          <input id="income-toggle" type="checkbox">
+          <span>Color by income</span>
+        </label>
+        <p class="toggle__hint">
+          Fills each zip by median household income; your list colors move to the outline.
+        </p>
+      </div>
+
       <div id="error-line" class="error" role="alert" hidden></div>
       <div id="status-line" class="status" aria-live="polite"></div>
       <div id="conflict-note" class="conflict-note" hidden></div>

@@ -26,7 +26,6 @@ The app operates on **one state at a time**. Users pick a state before pasting z
 ### 1.3 Out of scope for v1
 
 - Multi-state pastes (cross-state inputs are warned, not rendered).
-- Choropleth / value-per-zip rendering. Single-color highlight only.
 - Groups (multiple labeled lists with different colors).
 - Server-side short links.
 - Analytics.
@@ -349,7 +348,12 @@ These are explicitly punted from v1. Listed so they don't block now and aren't f
 - **Analytics.** Re-evaluate after launch.
 - **Ad placement.** No layout reservation; revisit when traffic is meaningful.
 - **Multi-state mode** (rendering across borders) — possible follow-up.
-- **Groups / choropleth** — possible follow-up; data model should not block it.
+- **Groups** — possible follow-up; data model should not block it.
+- **Income filter → export** — the income overlay (§13) only *colors* zips the user
+  already has. The inverse flow — pick a threshold, get the qualifying zips, copy
+  them into an ad platform — is the more valuable half and is deliberately
+  deferred. `income.js` is a pure value→color map and `renderColored()` takes an
+  explicit feature list, so that mode is a new caller, not a rewrite.
 - **Cross-state auto-detect / "switch to CA?" UX** — punted; v1 only warns.
 - **Cookie/consent banner** — none in v1 (no analytics, no third-party cookies).
 
@@ -369,3 +373,79 @@ The v1 ships when, on `https://mohmedvaid.github.io/zipmap/`:
 8. PNG and CSV export both work.
 9. All 51 state pages exist and have distinct `<title>` / `<meta>`.
 10. No console errors on a fresh page load with a valid state route.
+
+---
+
+## 13. Income Overlay
+
+A **"Color by income"** toggle in the paste panel. Off by default. When on, matched
+ZCTAs are filled by median household income instead of their list color, and the
+blue/red list color moves to the polygon's **stroke** — the fill is spoken for, and
+a burgundy "wealthy" fill beside a red "competitor" fill is unreadable. Both facts
+stay on one map: which list a zip came from, and what it earns.
+
+### 13.1 Source
+
+**Census ACS 5-Year Estimates, table B19013** (median household income), read from
+the bulk Summary File — `scripts/build-income-data.mjs` builds it. Public domain
+(17 U.S.C. §105), no license, no runtime cost.
+
+ACS publishes at **ZCTA** geography, which is exactly the key `states/*.geojson`
+already uses — the join is direct, no crosswalk. Note ACS only publishes ZCTA in the
+5-year series; the 1-year series doesn't reach geographies this small.
+
+We read the Summary File rather than `api.census.gov` because **the API now rejects
+keyless requests**, and a build-time key would be a secret to carry for data that
+never changes between releases.
+
+### 13.2 Distribution
+
+`income.json` ships as its own `income-YYYY` tag with its own `INCOME_VERSION`
+constant — deliberately **not** folded into `data-YYYY`. ACS ships a vintage every
+December; ZCTA boundaries only move with the decennial census. One shared tag would
+mean republishing ~50MB of unchanged polygons to bump a year.
+
+~257KB gzipped for all ~30.5k ZCTAs with an estimate — a fifth of a single state's
+geometry. Fetched lazily on first toggle, cached for the tab's lifetime. National
+rather than per-state: the breaks are national anyway, and one file is one cache
+entry.
+
+### 13.3 Scale
+
+**Fixed national breaks**, not per-state quantiles. Quantiles would give every state
+maximum contrast, but then burgundy means "rich for Mississippi" on one map and
+"rich for Connecticut" on another — useless for deciding where to spend money. The
+cost is that poor states render uniformly pale; a "relative to this state" mode is a
+possible follow-up.
+
+Breaks: **45 / 60 / 75 / 90 / 110 / 135 / 175** (thousands), 8 bins, ColorBrewer
+`YlOrRd` (pale yellow → dark burgundy — sequential, ordered by lightness, so it
+survives most color-vision deficiencies).
+
+Tuned to the real 2020-2024 ZCTA distribution (national median ~$72k), not round
+decades: even $20k steps put a third of all ZCTAs in one bin. These hold every bin
+to 2-26% and give real resolution across $90-175k, where affluent-targeting
+decisions get made.
+
+### 13.4 Data honesty
+
+Three ways this data lies, all surfaced rather than hidden:
+
+- **No estimate** — 3,225 ZCTAs (9.5%) carry the `-666666666` jam value. Omitted from
+  `income.json`; rendered neutral grey with a "No data" legend entry. Untrapped these
+  parse as ordinary numbers and paint as the poorest zips in the country.
+- **Top-coded** — ACS ceilings median household income at **$250,001** (118 ZCTAs).
+  It's a ceiling, not a measurement; the popup says so.
+- **Noisy** — ~30% of ZCTAs have a margin of error above 25% of the estimate, and
+  ~10% exceed 50%. Kept and painted, but the popup shows `±MOE` and flags the
+  estimate as unreliable. A "$180k ±$95k" zip is ad spend aimed at nothing. Mostly
+  small rural and PO-box-only ZCTAs.
+
+Also unchanged from §1.2: **zip ≠ ZCTA**. Ad platforms target USPS zips; ACS reports
+ZCTAs, and some USPS zips have no ZCTA at all. Income attaches to the ZCTA.
+
+### 13.5 Camera
+
+Toggling income **does not re-fit** the camera. §2.5 ties auto-fit to the matched set
+changing; restyling isn't a change to the matched set, and re-fitting would yank the
+user back from wherever they'd panned.

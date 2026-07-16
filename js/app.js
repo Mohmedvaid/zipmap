@@ -1,11 +1,17 @@
 import { STATES, stateName } from './states.js';
 import { parseZips } from './parse.js';
-import { fetchStateGeoJSON } from './data.js';
+import { fetchStateGeoJSON, fetchIncome } from './data.js';
 import { initMap, renderColored, resetToUS } from './map.js';
 
 const LS_STATE_KEY = 'zipmap:state';
 const LS_BLUE_KEY = 'lastBlueZips';
 const LS_RED_KEY = 'lastRedZips';
+const LS_INCOME_KEY = 'zipmap:income';
+
+// Whatever is currently on the map, kept so the income toggle can repaint the
+// same features without re-fetching the state file or re-running the match.
+let lastRender = null;
+let incomeData = null;
 
 const els = {
   state: document.getElementById('state-select'),
@@ -18,6 +24,7 @@ const els = {
   unmappedCount: document.getElementById('unmapped-count'),
   unmappedList: document.getElementById('unmapped-list'),
   error: document.getElementById('error-line'),
+  income: document.getElementById('income-toggle'),
 };
 
 function populateStateDropdown() {
@@ -156,13 +163,52 @@ async function highlight() {
   ];
   renderUnmapped(unmapped);
 
-  renderColored({ blue: blueMatched.features, red: redMatched.features });
+  lastRender = { blue: blueMatched.features, red: redMatched.features };
+  await paint({ fit: true });
+  persist();
+}
 
+function persist() {
   try {
-    localStorage.setItem(LS_STATE_KEY, stateCode);
+    localStorage.setItem(LS_STATE_KEY, els.state.value);
     localStorage.setItem(LS_BLUE_KEY, els.blue.value);
     localStorage.setItem(LS_RED_KEY, els.red.value);
+    localStorage.setItem(LS_INCOME_KEY, els.income.checked ? '1' : '');
   } catch {}
+}
+
+async function ensureIncome() {
+  if (!incomeData) incomeData = await fetchIncome();
+  return incomeData;
+}
+
+// Repaints whatever is already matched. `fit` is false when only the income
+// toggle changed: the matched set is the same, so re-fitting would yank the
+// camera back from wherever the user had panned to (SPEC §2.5 ties auto-fit to
+// the matched set changing, not to restyling).
+async function paint({ fit }) {
+  if (!lastRender) return;
+  let income = null;
+  if (els.income.checked) {
+    try {
+      income = await ensureIncome();
+    } catch (err) {
+      setError(err.message);
+      els.income.checked = false;
+    }
+  }
+  renderColored({ ...lastRender, income, fit });
+}
+
+async function onIncomeToggle() {
+  setError('');
+  els.income.disabled = true;
+  try {
+    await paint({ fit: false });
+  } finally {
+    els.income.disabled = false;
+  }
+  persist();
 }
 
 function restorePersisted() {
@@ -173,6 +219,7 @@ function restorePersisted() {
     if (s) els.state.value = s;
     if (b) els.blue.value = b;
     if (r) els.red.value = r;
+    els.income.checked = !!localStorage.getItem(LS_INCOME_KEY);
   } catch {}
 }
 
@@ -183,6 +230,7 @@ function main() {
   refreshButtonState();
 
   els.highlight.addEventListener('click', highlight);
+  els.income.addEventListener('change', onIncomeToggle);
   for (const input of [els.blue, els.red, els.state]) {
     input.addEventListener('input', refreshButtonState);
     input.addEventListener('change', refreshButtonState);
