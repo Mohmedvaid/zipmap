@@ -63,22 +63,22 @@ When the user **selects a state** but hasn't pasted yet:
 The paste panel has **two textareas**, side-by-side on desktop, stacked on mobile:
 
 - **Blue ZIPs** (required) — the primary list. The "Highlight" button is disabled until this contains at least one parseable zip.
-- **Red ZIPs** (optional) — the secondary list. Used for comparison: "where are my customers vs. where are my competitors", "won deals vs. lost deals", etc.
+- **Black ZIPs** (optional) — the secondary list. Used for comparison: "where are my customers vs. where are my competitors", "won deals vs. lost deals", etc.
 
 Each textarea has a color-coded label and a same-color focus ring so the user is never confused about which list they're editing.
 
 When the user clicks **Highlight**:
 
 1. Both textareas are parsed (§3) into deduped zip sets.
-2. **Red wins on conflict.** A zip that appears in both lists is removed from the blue set, rendered red on the map, and counted in the red bucket. When this happens, a small note appears above the unmapped list: *"N zips were in both lists; treated as red."*
-3. Map renders matched ZCTAs as two layers — blue first, red on top — with the highlight style (§2.4).
+2. **Black wins on conflict.** A zip that appears in both lists is removed from the blue set, rendered black on the map, and counted in the black bucket. When this happens, a small note appears above the unmapped list: *"N zips were in both lists; treated as black."*
+3. Map renders matched ZCTAs as two layers — blue first, black on top — with the highlight style (§2.4).
 4. Map **auto-fits** bounds to the union of all matched ZCTAs.
 5. Status panel shows a **two-line counter**:
    - `Blue: X of Y mapped to Texas`
-   - `Red: X of Y mapped to Texas` *(omitted if the red textarea is empty)*
+   - `Black: X of Y mapped to Texas` *(omitted if the black textarea is empty)*
 
-   `Y` is the post-conflict effective count for that color, so `Blue + Red + conflicts = total user input` always balances.
-6. A collapsible **Unmapped (M)** list appears below the status. Each row shows a small colored dot (blue or red) so the user knows which textarea to fix.
+   `Y` is the post-conflict effective count for that color, so `Blue + Black + conflicts = total user input` always balances.
+6. A collapsible **Unmapped (M)** list appears below the status. Each row shows a small colored dot (blue or black) so the user knows which textarea to fix.
 7. On the map, **hover/click on a polygon → popup with the zip code**. On touch devices, tap shows popup (click outside dismisses).
 
 **Deferred to a later PR (not v1.0 critical):**
@@ -90,10 +90,19 @@ When the user clicks **Highlight**:
 ### 2.4 Highlight style
 
 - **Solid fill + thin stroke.** Two brand colors:
-  - Blue: `#2563eb` (tailwind blue-600)
-  - Red:  `#dc2626` (tailwind red-600)
+  - Blue:  `#2563eb` (tailwind blue-600)
+  - Black: `#111827` (tailwind gray-900)
 - Default state: 50% opacity fill, 1px stroke same color at 100% opacity.
 - Hover state: 100% opacity fill, 2px stroke.
+
+The second list was red (`#dc2626`) until the income overlay (§13) landed. It had
+to move: in income mode the list color becomes the stroke over a pale-yellow →
+burgundy fill, and a red stroke disappears against the burgundy bins — i.e.
+exactly on the wealthy zips the overlay exists to find. Black is the one hue that
+holds contrast across all eight bins and can't be confused with a warm ramp under
+any color-vision deficiency. Pink and violet were considered and rejected: pink
+joins the ramp's warm end, violet reads as blue under red-green deficiency and
+would collide with the primary list.
 
 ### 2.5 Camera behavior
 
@@ -109,7 +118,7 @@ When the user clicks **Highlight**:
 
 ## 3. Input Parsing
 
-Each textarea (blue and red) is parsed independently using the same rules:
+Each textarea (blue and black) is parsed independently using the same rules:
 
 1. **Split on whitespace, comma, semicolon, or pipe.** Hyphens are *not* separators — that lets the next rule strip the `+4` suffix of `12345-6789` cleanly.
 2. **For each token, extract the leading digit run.** Tokens with no leading digits are discarded (e.g. `abc` → nothing).
@@ -119,7 +128,7 @@ Each textarea (blue and red) is parsed independently using the same rules:
 
 After both textareas are parsed, apply the **cross-list conflict rule**:
 
-5. **Red wins.** Any zip present in both deduped lists is removed from the blue set. It will render red on the map and count in the red bucket only. The conflict count is surfaced in the UI (§2.3).
+5. **Black wins.** Any zip present in both deduped lists is removed from the blue set. It will render black on the map and count in the black bucket only. The conflict count is surfaced in the UI (§2.3).
 
 Then **classify each unique zip per color**:
 
@@ -219,11 +228,11 @@ Generated state HTML files **are committed** to the repo (cheap to regenerate; m
 When the user has a pasted result, support a shareable URL of the form:
 
 ```
-https://mohmedvaid.github.io/zipmap/?state=il&blue=60077,60201&red=60035,60062
+https://mohmedvaid.github.io/zipmap/?state=il&blue=60077,60201&black=60035,60062
 ```
 
 - **Plain query-string** with the state code plus comma-joined zip lists per color. Easy to construct, easy to debug, no client-side library required.
-- On page load: if `?state=` is present, select the state; if `blue=` or `red=` is present, populate the corresponding textarea and trigger a render.
+- On page load: if `?state=` is present, select the state; if `blue=` or `black=` is present, populate the corresponding textarea and trigger a render.
 - After a paste, **don't** auto-update the URL. Provide an explicit **"Copy share link"** button next to the result counter.
 - Length budget: 5-digit zips + `,` separators fit ~1,300 zips per color in 8KB. That's well above the 5,000-unique soft cap (§8) only for moderate inputs — re-check when both lists are large, and fall back to a compressed `#z=` fragment if needed.
 
@@ -380,9 +389,9 @@ The v1 ships when, on `https://mohmedvaid.github.io/zipmap/`:
 
 A **"Color by income"** toggle in the paste panel. Off by default. When on, matched
 ZCTAs are filled by median household income instead of their list color, and the
-blue/red list color moves to the polygon's **stroke** — the fill is spoken for, and
-a burgundy "wealthy" fill beside a red "competitor" fill is unreadable. Both facts
-stay on one map: which list a zip came from, and what it earns.
+blue/black list color moves to the polygon's **stroke** — the fill is spoken for by
+the choropleth. Both facts stay on one map: which list a zip came from, and what it
+earns. See §2.4 for why the second list is black rather than red.
 
 ### 13.1 Source
 

@@ -10,14 +10,19 @@ import {
 // Continental US bounds, used as the initial camera before any state is loaded.
 const US_BOUNDS = [[24.5, -125.0], [49.4, -66.9]];
 
+// The second list is near-black rather than red because the income ramp (§13.3)
+// runs pale yellow -> burgundy. A red stroke vanishes against the burgundy bins,
+// i.e. precisely on the wealthy zips the overlay exists to find. Black is the
+// one hue that holds contrast across all eight bins and can't be confused with
+// a warm ramp under any color-vision deficiency.
 const STYLES = {
-  blue: { color: '#2563eb', weight: 1, opacity: 1, fillColor: '#2563eb', fillOpacity: 0.5 },
-  red:  { color: '#dc2626', weight: 1, opacity: 1, fillColor: '#dc2626', fillOpacity: 0.5 },
+  blue:  { color: '#2563eb', weight: 1, opacity: 1, fillColor: '#2563eb', fillOpacity: 0.5 },
+  black: { color: '#111827', weight: 1, opacity: 1, fillColor: '#111827', fillOpacity: 0.5 },
 };
 
 let map = null;
 let blueLayer = null;
-let redLayer = null;
+let blackLayer = null;
 let legend = null;
 
 export function initMap(containerId) {
@@ -36,9 +41,8 @@ export function initMap(containerId) {
 }
 
 // In income mode the list color moves from the fill to the stroke: the fill is
-// spoken for by the choropleth, and a burgundy "wealthy" fill sitting next to a
-// red "competitor" fill is unreadable. Outlining instead keeps both facts on
-// one map — which list a zip came from, and what it earns.
+// spoken for by the choropleth. Outlining keeps both facts on one map — which
+// list a zip came from, and what it earns.
 function styleFor(colorName, feature, income) {
   const base = STYLES[colorName];
   if (!income) return base;
@@ -116,33 +120,33 @@ function renderLegend(income) {
   legend.addTo(map);
 }
 
-export function renderColored({ blue = [], red = [], income = null, fit = true } = {}) {
+export function renderColored({ blue = [], black = [], income = null, fit = true } = {}) {
   if (!map) return;
   if (blueLayer) { map.removeLayer(blueLayer); blueLayer = null; }
-  if (redLayer) { map.removeLayer(redLayer); redLayer = null; }
+  if (blackLayer) { map.removeLayer(blackLayer); blackLayer = null; }
 
   blueLayer = buildLayer(blue, 'blue', income);
-  redLayer = buildLayer(red, 'red', income);
+  blackLayer = buildLayer(black, 'black', income);
 
-  // Add blue first so red paints on top — matters when a zip somehow ends up
-  // in both layers; the red-wins rule in app.js already keeps that from
+  // Add blue first so black paints on top — matters when a zip somehow ends up
+  // in both layers; the black-wins rule in app.js already keeps that from
   // happening, but the z-order makes the intent visible if it ever slips.
   if (blueLayer) blueLayer.addTo(map);
-  if (redLayer) redLayer.addTo(map);
+  if (blackLayer) blackLayer.addTo(map);
 
   renderLegend(income);
 
   if (!fit) return;
   const bounds = L.latLngBounds([]);
   if (blueLayer) bounds.extend(blueLayer.getBounds());
-  if (redLayer) bounds.extend(redLayer.getBounds());
+  if (blackLayer) bounds.extend(blackLayer.getBounds());
   if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24] });
 }
 
 export function resetToUS() {
   if (!map) return;
   if (blueLayer) { map.removeLayer(blueLayer); blueLayer = null; }
-  if (redLayer) { map.removeLayer(redLayer); redLayer = null; }
+  if (blackLayer) { map.removeLayer(blackLayer); blackLayer = null; }
   renderLegend(null);
   map.fitBounds(US_BOUNDS);
 }

@@ -5,7 +5,7 @@ import { initMap, renderColored, resetToUS } from './map.js';
 
 const LS_STATE_KEY = 'zipmap:state';
 const LS_BLUE_KEY = 'lastBlueZips';
-const LS_RED_KEY = 'lastRedZips';
+const LS_BLACK_KEY = 'lastBlackZips';
 const LS_INCOME_KEY = 'zipmap:income';
 
 // Whatever is currently on the map, kept so the income toggle can repaint the
@@ -16,7 +16,7 @@ let incomeData = null;
 const els = {
   state: document.getElementById('state-select'),
   blue: document.getElementById('blue-input'),
-  red: document.getElementById('red-input'),
+  black: document.getElementById('black-input'),
   highlight: document.getElementById('highlight-btn'),
   status: document.getElementById('status-line'),
   conflict: document.getElementById('conflict-note'),
@@ -58,7 +58,7 @@ function setConflict(count) {
     return;
   }
   const noun = count === 1 ? 'zip was' : 'zips were';
-  els.conflict.textContent = `${count} ${noun} in both lists; treated as red.`;
+  els.conflict.textContent = `${count} ${noun} in both lists; treated as black.`;
   els.conflict.hidden = false;
 }
 
@@ -85,7 +85,7 @@ function renderUnmapped(items) {
 
 function refreshButtonState() {
   // Highlight is enabled once the user has typed at least one parseable zip
-  // into the blue textarea AND picked a state. Red alone is not enough.
+  // into the blue textarea AND picked a state. Black alone is not enough.
   const hasBlue = parseZips(els.blue.value).length > 0;
   const hasState = !!els.state.value;
   els.highlight.disabled = !(hasBlue && hasState);
@@ -100,19 +100,19 @@ async function highlight() {
   }
 
   const blueRaw = parseZips(els.blue.value);
-  const redRaw = parseZips(els.red.value);
+  const blackRaw = parseZips(els.black.value);
 
   if (!blueRaw.length) {
     setError('Enter at least one blue zip.');
     return;
   }
 
-  // Red wins on conflict: a zip in both lists is removed from the blue set
-  // before matching, so it paints red and counts in the red bucket only.
-  const redSet = new Set(redRaw);
-  const conflicts = blueRaw.filter(z => redSet.has(z));
-  const blueEffective = blueRaw.filter(z => !redSet.has(z));
-  const redEffective = redRaw;
+  // Black wins on conflict: a zip in both lists is removed from the blue set
+  // before matching, so it paints black and counts in the black bucket only.
+  const blackSet = new Set(blackRaw);
+  const conflicts = blueRaw.filter(z => blackSet.has(z));
+  const blueEffective = blueRaw.filter(z => !blackSet.has(z));
+  const blackEffective = blackRaw;
 
   els.highlight.dataset.busy = '1';
   els.highlight.disabled = true;
@@ -147,23 +147,23 @@ async function highlight() {
   };
 
   const blueMatched = matched(blueEffective);
-  const redMatched = matched(redEffective);
+  const blackMatched = matched(blackEffective);
 
   const state = stateName(stateCode);
   const lines = [`Blue: ${blueMatched.matchedSet.size} of ${blueEffective.length} mapped to ${state}`];
-  if (redEffective.length) {
-    lines.push(`Red: ${redMatched.matchedSet.size} of ${redEffective.length} mapped to ${state}`);
+  if (blackEffective.length) {
+    lines.push(`Black: ${blackMatched.matchedSet.size} of ${blackEffective.length} mapped to ${state}`);
   }
   setStatus(lines.join('\n'));
   setConflict(conflicts.length);
 
   const unmapped = [
     ...blueEffective.filter(z => !blueMatched.matchedSet.has(z)).map(zip => ({ zip, color: 'blue' })),
-    ...redEffective.filter(z => !redMatched.matchedSet.has(z)).map(zip => ({ zip, color: 'red' })),
+    ...blackEffective.filter(z => !blackMatched.matchedSet.has(z)).map(zip => ({ zip, color: 'black' })),
   ];
   renderUnmapped(unmapped);
 
-  lastRender = { blue: blueMatched.features, red: redMatched.features };
+  lastRender = { blue: blueMatched.features, black: blackMatched.features };
   await paint({ fit: true });
   persist();
 }
@@ -172,7 +172,7 @@ function persist() {
   try {
     localStorage.setItem(LS_STATE_KEY, els.state.value);
     localStorage.setItem(LS_BLUE_KEY, els.blue.value);
-    localStorage.setItem(LS_RED_KEY, els.red.value);
+    localStorage.setItem(LS_BLACK_KEY, els.black.value);
     localStorage.setItem(LS_INCOME_KEY, els.income.checked ? '1' : '');
   } catch {}
 }
@@ -215,10 +215,10 @@ function restorePersisted() {
   try {
     const s = localStorage.getItem(LS_STATE_KEY);
     const b = localStorage.getItem(LS_BLUE_KEY);
-    const r = localStorage.getItem(LS_RED_KEY);
+    const r = localStorage.getItem(LS_BLACK_KEY);
     if (s) els.state.value = s;
     if (b) els.blue.value = b;
-    if (r) els.red.value = r;
+    if (r) els.black.value = r;
     els.income.checked = !!localStorage.getItem(LS_INCOME_KEY);
   } catch {}
 }
@@ -231,11 +231,11 @@ function main() {
 
   els.highlight.addEventListener('click', highlight);
   els.income.addEventListener('change', onIncomeToggle);
-  for (const input of [els.blue, els.red, els.state]) {
+  for (const input of [els.blue, els.black, els.state]) {
     input.addEventListener('input', refreshButtonState);
     input.addEventListener('change', refreshButtonState);
   }
-  for (const ta of [els.blue, els.red]) {
+  for (const ta of [els.blue, els.black]) {
     ta.addEventListener('keydown', e => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
